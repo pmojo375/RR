@@ -52,6 +52,7 @@ def run_CGK(file_name, selected_cgk=None):
 
     results = [['Measurement', 'CGK']]
 
+    plot_info = []
     for i, measurement in enumerate(measurements):
         SV = df[measurement].std() * 3
         tol_10 = tolerances[i] * .1
@@ -123,85 +124,10 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, show_part_
 
     results = [temp]
 
+    # Will collect per-measurement info for plotting after stats
+    plot_info = []
 
-    if boxplots:
-        # dynamic grid based on number of measurements
-        num_plots = len(measurements)
-        rows = int(np.ceil(np.sqrt(num_plots)))
-        cols = int(np.ceil(num_plots / rows))
-        fig, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4.5))
-        fig.suptitle('Measurement Boxplots')
-
-        # Flatten axes for easy indexing
-        axes_list = np.array(axs).reshape(-1) if isinstance(axs, (list, np.ndarray)) else np.array([axs])
-
-        for i, measurement in enumerate(measurements):
-            ax = axes_list[i]
-            df.boxplot(column=measurement, by='Part', ax=ax, patch_artist=True)
-            ax.set_title(measurement)
-            ax.set_xlabel('Part')
-            ax.set_ylabel(measurement)
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: int(x)))
-            # set y axis to 1.5 times the range of the data
-            ax.set_ylim(df[measurement].min() - (df[measurement].max() - df[measurement].min()) / 2, df[measurement].max() + (df[measurement].max() - df[measurement].min()) / 2)
-
-        # Hide any unused axes
-        for j in range(num_plots, len(axes_list)):
-            axes_list[j].axis('off')
-
-        # space out subplots more
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        plt.subplots_adjust(hspace=0.5)
-
-        # set plot window title
-        fig.canvas.manager.set_window_title('Measurement Box Plots')
-
-        # set window size roughly proportional to grid
-        fig.set_size_inches(max(10, cols * 5), max(8, rows * 4))
-
-        plt.show()
-
-    if scatterplots:
-        # dynamic grid based on number of measurements
-        num_plots = len(measurements)
-        rows = int(np.ceil(np.sqrt(num_plots)))
-        cols = int(np.ceil(num_plots / rows))
-        fig, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4.5))
-        fig.suptitle('Measurement Scatter Plots')
-
-        # Flatten axes for easy indexing
-        axes_list = np.array(axs).reshape(-1) if isinstance(axs, (list, np.ndarray)) else np.array([axs])
-
-        # line plot with dots only
-        for i, measurement in enumerate(measurements):
-            ax = axes_list[i]
-            df.plot.scatter(x='Part', y=measurement, ax=ax)
-            ax.set_title(measurement)
-            ax.set_xlabel('Part')
-            ax.set_ylabel(measurement)
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
-            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: int(x)))
-            # set y axis to 1.5 times the range of the data
-            ax.set_ylim(df[measurement].min() - (df[measurement].max() - df[measurement].min()) / 4, df[measurement].max() + (df[measurement].max() - df[measurement].min()) / 4)
-            # Make the points smaller (overlay)
-            ax.scatter(df['Part'], df[measurement], s=10)
-
-        # Hide any unused axes
-        for j in range(num_plots, len(axes_list)):
-            axes_list[j].axis('off')
-
-        # space out subplots more
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        plt.subplots_adjust(hspace=0.5)
-
-        # set plot window title
-        fig.canvas.manager.set_window_title('Measurement Scatter Plots')
-
-        # set window size roughly proportional to grid
-        fig.set_size_inches(max(10, cols * 5), max(8, rows * 4))
-
-        plt.show()
+    # Defer plotting until after stats so we can show tolerance overlays
 
     for i, measurement in enumerate(measurements):
 
@@ -300,6 +226,109 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, show_part_
         output.append(result)
         
         results.append(output)
+
+        # collect plotting metadata
+        plot_info.append({
+            'measurement': measurement,
+            'tolerance': Tolerance,
+            'grr_pct_tol': GRR_Percent_Tolerance_num,
+        })
+
+    # Plotting after stats so we can overlay tolerances and labels
+    if boxplots:
+        num_plots = len(measurements)
+        rows = int(np.ceil(np.sqrt(num_plots)))
+        cols = int(np.ceil(num_plots / rows))
+        fig, axs = plt.subplots(rows, cols, figsize=(cols * 5.5, rows * 4.8))
+        fig.suptitle('Measurement Boxplots (with tolerance band and mean)')
+
+        axes_list = np.array(axs).reshape(-1) if isinstance(axs, (list, np.ndarray)) else np.array([axs])
+
+        for idx, info in enumerate(plot_info):
+            measurement = info['measurement']
+            tol = info['tolerance']
+            grr_pct = info['grr_pct_tol']
+            ax = axes_list[idx]
+            df.boxplot(column=measurement, by='Part', ax=ax, patch_artist=True)
+            ax.set_title(f"{measurement}\nGRR %Tol: {grr_pct:.1f}%")
+            ax.set_xlabel('Part')
+            ax.set_ylabel(measurement)
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: int(x)))
+
+            # tolerance band (0 to tolerance since values are abs)
+            ax.axhspan(0, tol, color='green', alpha=0.08, label='Tolerance')
+
+            # overall mean line
+            ax.axhline(y=df[measurement].mean(), color='red', linestyle='--', linewidth=1, label='Mean')
+
+            # y-limits: pad by 25% of data range
+            mmin = df[measurement].min()
+            mmax = df[measurement].max()
+            pad = (mmax - mmin) * 0.25 if mmax > mmin else max(1e-6, tol * 0.25)
+            ax.set_ylim(mmin - pad, mmax + pad)
+
+            # show legend minimally
+            ax.legend(loc='upper right', fontsize='x-small', frameon=False)
+
+        for j in range(num_plots, len(axes_list)):
+            axes_list[j].axis('off')
+
+        plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+        plt.subplots_adjust(hspace=0.6)
+        fig.canvas.manager.set_window_title('Measurement Box Plots')
+        fig.set_size_inches(max(10, cols * 5.5), max(8, rows * 4.8))
+        plt.show()
+
+    if scatterplots:
+        num_plots = len(measurements)
+        rows = int(np.ceil(np.sqrt(num_plots)))
+        cols = int(np.ceil(num_plots / rows))
+        fig, axs = plt.subplots(rows, cols, figsize=(cols * 5.5, rows * 4.8))
+        fig.suptitle('Measurement Scatter Plots (with part means and tolerance)')
+
+        axes_list = np.array(axs).reshape(-1) if isinstance(axs, (list, np.ndarray)) else np.array([axs])
+
+        for idx, info in enumerate(plot_info):
+            measurement = info['measurement']
+            tol = info['tolerance']
+            grr_pct = info['grr_pct_tol']
+            ax = axes_list[idx]
+            ax.set_title(f"{measurement}\nGRR %Tol: {grr_pct:.1f}%")
+            ax.set_xlabel('Part')
+            ax.set_ylabel(measurement)
+
+            # scatter by part
+            ax.scatter(df['Part'], df[measurement], s=12, alpha=0.7)
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: int(x)))
+
+            # tolerance band
+            ax.axhspan(0, tol, color='green', alpha=0.08, label='Tolerance')
+
+            # line of per-part means
+            try:
+                part_means = df.groupby('Part')[measurement].mean()
+                ax.plot(part_means.index, part_means.values, color='orange', linewidth=1.5, marker='o', markersize=3, label='Part Mean')
+            except Exception:
+                pass
+
+            # y-limits padding
+            mmin = df[measurement].min()
+            mmax = df[measurement].max()
+            pad = (mmax - mmin) * 0.25 if mmax > mmin else max(1e-6, tol * 0.25)
+            ax.set_ylim(mmin - pad, mmax + pad)
+
+            ax.legend(loc='upper right', fontsize='x-small', frameon=False)
+
+        for j in range(num_plots, len(axes_list)):
+            axes_list[j].axis('off')
+
+        plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+        plt.subplots_adjust(hspace=0.6)
+        fig.canvas.manager.set_window_title('Measurement Scatter Plots')
+        fig.set_size_inches(max(10, cols * 5.5), max(8, rows * 4.8))
+        plt.show()
 
     #print(tabulate(results, headers='firstrow', tablefmt='fancy_grid'))
     return pd.DataFrame(results[1:], columns=results[0])
