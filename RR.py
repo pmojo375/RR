@@ -87,7 +87,7 @@ def run_CGK(file_name, known_values, all_methods=False):
     return pd.DataFrame(results[1:], columns=results[0])
 
 
-def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_methods=False, display_all=False, show_part_data=False, selected_measurements=None):
+def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, display_all=False, show_part_data=False, selected_measurements=None):
 
     # Load the data from CSV
     df = pd.read_csv(csv_name)
