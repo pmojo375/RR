@@ -86,41 +86,11 @@ def run_CGK(file_name, known_values, all_methods=False):
 
     return pd.DataFrame(results[1:], columns=results[0])
 
- 
-
-def fix(df):
-    parts = df['Part'].unique()
-    for part in parts:
-        # get the all parts with the same part number
-        part_df = df[df['Part'] == part]
-        mean = part_df['Side2ToFront_Perpendicularity'].mean()
-        min = part_df['Side2ToFront_Perpendicularity'].min()
-        max = part_df['Side2ToFront_Perpendicularity'].max()
-
-        std = part_df['Side2ToFront_Perpendicularity'].std() * 3
-        z_scores = (part_df['Side2ToFront_Perpendicularity'] - mean) / std
-
-        part_df['Side2ToFront_Perpendicularity'] = np.where(np.abs(z_scores) > 3, np.clip(part_df['Side2ToFront_Perpendicularity'], min, max), part_df['Side2ToFront_Perpendicularity'])
-
-        # replace the original part data with the fixed data
-        df.loc[df['Part'] == part, 'Side2ToFront_Perpendicularity'] = part_df['Side2ToFront_Perpendicularity']
-
-    return df
 
 def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_methods=False, display_all=False, show_part_data=False, selected_measurements=None):
 
     # Load the data from CSV
     df = pd.read_csv(csv_name)
-
-    #df = fix(df)
-
-    # Spare[12] = Side1ToFrontFromPoints
-    # Spare[13] = Side2ToFrontFromPoints
-    # Spare[14] = Side1ToTopFromPoints
-    # Spare[15] = Side2ToTopFromPoints
-    # Sides_Parallelism = ParallelismMethod1
-    # Spare[10] = ParallelismMethod2
-    # Spare[11] = ParallelismMethod3
 
     # Ensure Part and Nest columns exist
     if 'Part' not in df.columns:
