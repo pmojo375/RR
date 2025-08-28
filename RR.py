@@ -87,7 +87,7 @@ def run_CGK(file_name, known_values, all_methods=False):
     return pd.DataFrame(results[1:], columns=results[0])
 
 
-def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, display_all=False, show_part_data=False, selected_measurements=None):
+def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, show_part_data=False, selected_measurements=None):
 
     # Load the data from CSV
     df = pd.read_csv(csv_name)
@@ -125,13 +125,9 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, display_al
 
     output_types = ['', ' * 6', '% of Tolarance']
     outputs = []
-
-    if display_all:
-        types = ['GRR Variation', 'Repeatability', 'Reporducibility', 'Nest Variation', 'Part Nest Variation', 'Part Variation', 'Total Variation']
-        outputs.extend([f'{type} {output_type}' for type in types for output_type in output_types])
-    else:
-        types = ['GRR Variation']
-        outputs.extend([f'{type} {output_type}' for type in types for output_type in output_types])
+    # Always show GRR summary only
+    types = ['GRR Variation']
+    outputs.extend([f'{type} {output_type}' for type in types for output_type in output_types])
 
     if not type1:
         # Summarized part stats headers instead of listing each part
@@ -316,10 +312,7 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, display_al
 
         output = []
 
-        if display_all:
-            output.extend([measurement, f'{GRR_Variation:.6f}', f'{GRR_Variation * 6:.6f}', GRR_Percent_Tolerance, f'{Repeatability:.6f}',f'{Repeatability * 6:.6f}', Repeatability_Percent_Tolerance, f'{Reporducibility:.6f}', f'{Reporducibility * 6:.6f}', Reporducibility_Percent_Tolerance, f'{np.sqrt(Var_Nest):.6f}', f'{np.sqrt(Var_Nest) * 6:.6f}', f'{(np.sqrt(Var_Nest) * 6)/Tolerance:.2f}%', f'{np.sqrt(Var_Part_Nest):.6f}', f'{np.sqrt(Var_Part_Nest) * 6:.6f}', f'{(np.sqrt(Var_Part_Nest) * 6)/Tolerance:.2f}%', f'{np.sqrt(Var_Part):.6f}', f'{np.sqrt(Var_Part) * 6:.6f}', f'{(np.sqrt(Var_Part) * 6)/Tolerance:.2f}%', f'{Study_Variation:.6f}', f'{Study_Variation * 6:.6f}', Total_Percent_Tolerance])
-        else:
-            output = [measurement, f'{GRR_Variation:.6f}', f'{GRR_Variation * 6:.6f}', GRR_Percent_Tolerance]
+        output = [measurement, f'{GRR_Variation:.6f}', f'{GRR_Variation * 6:.6f}', GRR_Percent_Tolerance]
 
         output.extend(part_stats)
 
@@ -587,9 +580,6 @@ class MainWindow(QMainWindow):
         self.boxplots = QCheckBox("Display Box Plots")
         self.scatterplots = QCheckBox("Display Scatter Plots")
         self.type1_mode = QCheckBox("One Part, One Nest")
-        self.all_methods = QCheckBox("Do All Methods")
-        self.CGK_all_methods = QCheckBox("Do All Methods")
-        self.display_all = QCheckBox("Display All")
         self.show_part_data = QCheckBox("Show Part Data")
 
         self.ip_input.setPlaceholderText("Enter PLC IP")
@@ -610,8 +600,6 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.boxplots)
         self.layout.addWidget(self.scatterplots)
         self.layout.addWidget(self.type1_mode)
-        self.layout.addWidget(self.all_methods)
-        self.layout.addWidget(self.display_all)
         self.layout.addWidget(self.show_part_data)
         self.layout.addWidget(self.RR_button)
         self.layout.addLayout(self.CGK_layout)
@@ -624,7 +612,6 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.High_Width_known_value)
         self.layout.addWidget(self.Low_Width_known_value)
         self.layout.addWidget(self.Parallelism_known_value)
-        self.layout.addWidget(self.CGK_all_methods)
         self.layout.addWidget(self.CGK_button)
 
 
@@ -665,7 +652,7 @@ class MainWindow(QMainWindow):
 
     def RR_clicked(self, csv_name):
         try:
-            data = run_RR(csv_name, boxplots=self.boxplots.isChecked(), scatterplots=self.scatterplots.isChecked(), type1=self.type1_mode.isChecked(), all_methods=self.all_methods.isChecked(), display_all=self.display_all.isChecked(), show_part_data=self.show_part_data.isChecked(), selected_measurements=getattr(self, 'selected_measurements', None))
+            data = run_RR(csv_name, boxplots=self.boxplots.isChecked(), scatterplots=self.scatterplots.isChecked(), type1=self.type1_mode.isChecked(), show_part_data=self.show_part_data.isChecked(), selected_measurements=getattr(self, 'selected_measurements', None))
             # transpose data
             data = data.T
             self.show_RR_table_window(data)
@@ -678,7 +665,7 @@ class MainWindow(QMainWindow):
     def CGK_clicked(self, csv_name):
         self.save_history()
         known_values = [float(self.flatness_known_value.text()), float(self.S1_T_known_value.text()), float(self.S2_T_known_value.text()), float(self.S1_A_known_value.text()), float(self.S2_A_known_value.text()), (float(self.High_Width_known_value.text()) + float(self.Low_Width_known_value.text()))/2, float(self.High_Width_known_value.text()), float(self.Low_Width_known_value.text()), float(self.Parallelism_known_value.text())]
-        data = run_CGK(csv_name, known_values, all_methods=self.CGK_all_methods.isChecked())
+        data = run_CGK(csv_name, known_values)
 
         print(data)
         data = data.T
