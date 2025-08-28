@@ -134,13 +134,11 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
         outputs.extend([f'{type} {output_type}' for type in types for output_type in output_types])
 
     if not type1:
-        # per_part_outputs should be repeated for each part number like so: Part Range, Part Min, Part Max, etc
-        # need to know the number of parts and get their unique values
+        # Summarized part stats headers instead of listing each part
         if show_part_data:
-            parts = df['Part'].unique()
-            for part in parts:
-                for output in per_part_outputs:
-                    outputs.append(f'Part {part} {output}')
+            outputs.append('Max Part Range')
+            outputs.append('Average Part Range')
+            outputs.append('Part Range StDev')
     else:
         if show_part_data:
             for output in per_part_outputs:
@@ -291,13 +289,17 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
 
                 part_stats.extend([CG, value_range, min_value, max_value])
             else:
+                # Compute per-part ranges, then summarize
+                part_ranges = []
                 for part in df['Part'].unique():
                     part_df = df[df['Part'] == part]
-                    value_range = f'{part_df[measurement].max() - part_df[measurement].min():.4f}mm'
-                    min_value = f'{part_df[measurement].min():.4f}mm'
-                    max_value = f'{part_df[measurement].max():.4f}mm'
+                    part_ranges.append((part_df[measurement].max() - part_df[measurement].min()))
 
-                    part_stats.extend([value_range, min_value, max_value])
+                if len(part_ranges) > 0:
+                    max_range = np.max(part_ranges)
+                    avg_range = np.mean(part_ranges)
+                    std_range = np.std(part_ranges, ddof=1) if len(part_ranges) > 1 else 0.0
+                    part_stats.extend([f'{max_range:.4f}mm', f'{avg_range:.4f}mm', f'{std_range:.4f}mm'])
 
 
         # Check if Study Variation is within 10% of Tolerance
