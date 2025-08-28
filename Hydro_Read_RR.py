@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QDialogButtonBox,
+    QMessageBox,
 )
 from PySide6 import QtGui, QtCore
 
@@ -129,41 +130,16 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
 
     #df['ModelName'] = df['Nest']
 
-    # If user selected custom measurements with tolerances, override defaults
-    if selected_measurements is not None and len(selected_measurements) > 0:
-        # selected_measurements is a list of tuples: (column_name, tolerance_value)
-        measurements = [m for m, _ in selected_measurements]
-        tolarances = [t for _, t in selected_measurements]
-        # Ensure numeric columns
-        for measurement in measurements:
-            df[measurement] = pd.to_numeric(df[measurement], errors='coerce')
-    elif all_methods:
+    # Require user-selected measurements; no defaults
+    if selected_measurements is None or len(selected_measurements) == 0:
+        raise ValueError('No measurements selected. Please use Select Measurements to choose at least one column and tolerance.')
 
-        measurements = ['Flatness', 'FlatnessSmPts', 'Side1ToFront_Prof_ZeroT', 'Side1ToFront_Pts_ZeroT', 'Side2ToFront_Prof_ZeroT', 'Side2ToFront_Pts_ZeroT', 'Side1ToFrontFromPoints', 'Side2ToFrontFromPoints', 'Side1ToTopFromPoints', 'Side2ToTopFromPoints', 'Side1ToFront_Perpendicularity', 'Side2ToFront_Perpendicularity', 'Side1ToTop_Perpendicularity', 'Side2ToTop_Perpendicularity', 'CutWidthAve', 'CutWidthHigh', 'CutWidthLow', 'ParallelismMethod1','ParallelismMethod2','ParallelismMethod3']
-
-        tolarances = [.12, 120, .3, .3, .3, .3, .3, .3, .25, .25, .3, .3, .25, .25, .5, .5, .5, .3, .3, .3]
-
-        try:
-            # change column names to match measurements
-            df['FlatnessSmPts'] = df['Spare[1]']
-            df['Side1ToFrontFromPoints'] = df['Spare[12]']
-            df['Side2ToFrontFromPoints'] = df['Spare[13]']
-            df['Side1ToTopFromPoints'] = df['Spare[14]']
-            df['Side2ToTopFromPoints'] = df['Spare[15]']
-            df['ParallelismMethod1'] = df['Sides_Parallelism']
-            df['ParallelismMethod2'] = df['Spare[10]']
-            df['ParallelismMethod3'] = df['Spare[11]']
-            df['Side1ToFront_Prof_ZeroT'] = df['Spare[16]']
-            df['Side1ToFront_Pts_ZeroT'] = df['Spare[17]']
-            df['Side2ToFront_Prof_ZeroT'] = df['Spare[18]']
-            df['Side2ToFront_Pts_ZeroT'] = df['Spare[19]']
-        except:
-            print('Columns not found')
-    else:
-
-        measurements = ['Flatness', 'Side1ToFront_Perpendicularity', 'Side2ToFront_Perpendicularity', 'Side1ToTop_Perpendicularity', 'Side2ToTop_Perpendicularity', 'CutWidthAve', 'CutWidthHigh', 'CutWidthLow', 'Sides_Parallelism']
-
-        tolarances = [.12, .3, .3, .25, .25, .5, .5, .5, .3]
+    # selected_measurements is a list of tuples: (column_name, tolerance_value)
+    measurements = [m for m, _ in selected_measurements]
+    tolarances = [t for _, t in selected_measurements]
+    # Ensure numeric columns
+    for measurement in measurements:
+        df[measurement] = pd.to_numeric(df[measurement], errors='coerce')
 
     # absolute value each measurement
     for measurement in measurements:
@@ -699,11 +675,16 @@ class MainWindow(QMainWindow):
         self.save_history()
 
     def RR_clicked(self, csv_name):
-        data = run_RR(csv_name, boxplots=self.boxplots.isChecked(), scatterplots=self.scatterplots.isChecked(), type1=self.type1_mode.isChecked(), all_methods=self.all_methods.isChecked(), display_all=self.display_all.isChecked(), show_part_data=self.show_part_data.isChecked(), selected_measurements=getattr(self, 'selected_measurements', None))
-        # transpose data
-        data = data.T
-        self.show_RR_table_window(data)
-        self.save_history()
+        try:
+            data = run_RR(csv_name, boxplots=self.boxplots.isChecked(), scatterplots=self.scatterplots.isChecked(), type1=self.type1_mode.isChecked(), all_methods=self.all_methods.isChecked(), display_all=self.display_all.isChecked(), show_part_data=self.show_part_data.isChecked(), selected_measurements=getattr(self, 'selected_measurements', None))
+            # transpose data
+            data = data.T
+            self.show_RR_table_window(data)
+            self.save_history()
+        except ValueError as e:
+            QMessageBox.warning(self, 'Selection Required', str(e))
+        except Exception as e:
+            QMessageBox.critical(self, 'Error', str(e))
 
     def CGK_clicked(self, csv_name):
         self.save_history()
