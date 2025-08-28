@@ -33,56 +33,35 @@ import matplotlib.pyplot as plt
 import qdarktheme
 import pandas as pd
 
-def run_CGK(file_name, known_values, all_methods=False):
+def run_CGK(file_name, selected_cgk=None):
     print(f'File {file_name}')
     df = pd.read_csv(file_name)
-    if all_methods:
-        measurements = ['Flatness', 'FlatnessSmPts', 'Side1ToFront_Prof_ZeroT', 'Side1ToFront_Pts_ZeroT', 'Side2ToFront_Prof_ZeroT', 'Side2ToFront_Pts_ZeroT', 'Side1ToFrontFromPoints', 'Side2ToFrontFromPoints', 'Side1ToTopFromPoints', 'Side2ToTopFromPoints', 'Side1ToFront_Perpendicularity', 'Side2ToFront_Perpendicularity', 'Side1ToTop_Perpendicularity', 'Side2ToTop_Perpendicularity', 'CutWidthAve', 'CutWidthHigh', 'CutWidthLow', 'ParallelismMethod1','ParallelismMethod2','ParallelismMethod3']
-        tolarances = [.12, 120, .3, .3, .3, .3, .3, .3, .25, .25, .3, .3, .25, .25, .5, .5, .5, .3, .3, .3]
 
-        try:
-            # change column names to match measurements
-            df['FlatnessSmPts'] = df['Spare[1]']
-            df['Side1ToFrontFromPoints'] = df['Spare[12]']
-            df['Side2ToFrontFromPoints'] = df['Spare[13]']
-            df['Side1ToTopFromPoints'] = df['Spare[14]']
-            df['Side2ToTopFromPoints'] = df['Spare[15]']
-            df['ParallelismMethod1'] = df['Sides_Parallelism']
-            df['ParallelismMethod2'] = df['Spare[10]']
-            df['ParallelismMethod3'] = df['Spare[11]']
-            df['Side1ToFront_Prof_ZeroT'] = df['Spare[16]']
-            df['Side1ToFront_Pts_ZeroT'] = df['Spare[17]']
-            df['Side2ToFront_Prof_ZeroT'] = df['Spare[18]']
-            df['Side2ToFront_Pts_ZeroT'] = df['Spare[19]']
-        except:
-            print('Columns not found')
-    else:
-        measurements = ['Flatness', 'Side1ToFront_Perpendicularity', 'Side2ToFront_Perpendicularity', 'Side1ToTop_Perpendicularity', 'Side2ToTop_Perpendicularity', 'CutWidthAve', 'CutWidthHigh', 'CutWidthLow', 'Sides_Parallelism']
-        tolarances = [.12, .3, .3, .25, .25, .5, .5, .5, .3]
-    
-    df['Part'] = 1
-    df['Nest'] = 1
+    # Require user-selected CGK measurements
+    if selected_cgk is None or len(selected_cgk) == 0:
+        raise ValueError('No CGK measurements selected. Please use Select CGK to choose columns, tolerances, and known values.')
 
-    # absolute value each measurement
+    # selected_cgk: list of tuples (column_name, tolerance_value, known_value)
+    measurements = [m for m, _, _ in selected_cgk]
+    tolerances = [t for _, t, _ in selected_cgk]
+    known_values = [k for _, _, k in selected_cgk]
+
+    # Ensure numeric and absolute values
     for measurement in measurements:
-        df[measurement] = df[measurement].abs()
+        df[measurement] = pd.to_numeric(df[measurement], errors='coerce').abs()
 
     results = [['Measurement', 'CGK']]
- 
+
     for i, measurement in enumerate(measurements):
         SV = df[measurement].std() * 3
-
-        tolerance = tolarances[i] * .1
-
+        tol_10 = tolerances[i] * .1
         ave = df[measurement].mean()
-
-        CGK = (tolerance - abs(ave - known_values[i]))/SV
-
-        print(f'{measurement} std: {SV}, mean: {ave}, tol10: {tolerance}, cgk: {CGK}, known: {known_values[i]}')
-
+        if SV == 0 or np.isnan(SV):
+            CGK = np.nan
+        else:
+            CGK = (tol_10 - abs(ave - known_values[i])) / SV
+        print(f'{measurement} std: {SV}, mean: {ave}, tol10: {tol_10}, cgk: {CGK}, known: {known_values[i]}')
         results.append([measurement, CGK])
-
-    
 
     return pd.DataFrame(results[1:], columns=results[0])
 
@@ -533,24 +512,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Get Tag Data/R&R")
 
         self.layout = QVBoxLayout()
-        self.flatness_known_value = QLineEdit()
-        self.S1_T_known_value = QLineEdit()
-        self.S2_T_known_value = QLineEdit()
-        self.S1_A_known_value = QLineEdit()
-        self.S2_A_known_value = QLineEdit()
-        self.Ave_Width_known_value = QLineEdit()
-        self.High_Width_known_value = QLineEdit()
-        self.Low_Width_known_value = QLineEdit()
-        self.Parallelism_known_value = QLineEdit()
-        self.flatness_known_value.setPlaceholderText('Enter Flatness Known Value:')
-        self.S1_T_known_value.setPlaceholderText('Enter S1 to T Known Value:')
-        self.S2_T_known_value.setPlaceholderText('Enter S2 to T Known Value:')
-        self.S1_A_known_value.setPlaceholderText('Enter S1 to A Known Value:')
-        self.S2_A_known_value.setPlaceholderText('Enter S2 to A Known Value:')
-        self.Ave_Width_known_value.setPlaceholderText('Enter Ave Cut Width Known Value:')
-        self.High_Width_known_value.setPlaceholderText('Enter High Cut Width Known Value:')
-        self.Low_Width_known_value.setPlaceholderText('Enter Low Cut Width Known Value:')
-        self.Parallelism_known_value.setPlaceholderText('Enter Parallelism Known Value:')
 
         self.tag_input = QLineEdit()
         self.ip_input = QLineEdit()
@@ -565,6 +526,7 @@ class MainWindow(QMainWindow):
         self.CGK_input = QLineEdit()
         self.CGK_Browse_button = QPushButton('Browse')
         self.CGK_layout = QHBoxLayout()
+        self.select_cgk_button = QPushButton('Select CGK')
         self.CGK_button = QPushButton("Run CGK")
 
         self.RR_layout.addWidget(self.RR_input)
@@ -575,6 +537,7 @@ class MainWindow(QMainWindow):
 
         self.CGK_layout.addWidget(self.CGK_input)
         self.CGK_layout.addWidget(self.CGK_Browse_button)
+        self.CGK_layout.addWidget(self.select_cgk_button)
 
         # checkbox
         self.boxplots = QCheckBox("Display Box Plots")
@@ -603,15 +566,6 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.show_part_data)
         self.layout.addWidget(self.RR_button)
         self.layout.addLayout(self.CGK_layout)
-        self.layout.addWidget(self.flatness_known_value)
-        self.layout.addWidget(self.S1_T_known_value)
-        self.layout.addWidget(self.S2_T_known_value)
-        self.layout.addWidget(self.S1_A_known_value)
-        self.layout.addWidget(self.S2_A_known_value)
-        self.layout.addWidget(self.Ave_Width_known_value)
-        self.layout.addWidget(self.High_Width_known_value)
-        self.layout.addWidget(self.Low_Width_known_value)
-        self.layout.addWidget(self.Parallelism_known_value)
         self.layout.addWidget(self.CGK_button)
 
 
@@ -630,6 +584,8 @@ class MainWindow(QMainWindow):
         
         self.CGK_button.clicked.connect(
             lambda: self.CGK_clicked(self.CGK_input.text()))
+        self.select_cgk_button.clicked.connect(
+            lambda: self.open_cgk_selector(self.CGK_input.text()))
         
         self.RR_Browse_button.clicked.connect(
             lambda: self.RR_input.setText(QFileDialog.getOpenFileName(self, 'Open File', 'c:\\', 'CSV Files (*.csv)')[0]))
@@ -664,13 +620,16 @@ class MainWindow(QMainWindow):
 
     def CGK_clicked(self, csv_name):
         self.save_history()
-        known_values = [float(self.flatness_known_value.text()), float(self.S1_T_known_value.text()), float(self.S2_T_known_value.text()), float(self.S1_A_known_value.text()), float(self.S2_A_known_value.text()), (float(self.High_Width_known_value.text()) + float(self.Low_Width_known_value.text()))/2, float(self.High_Width_known_value.text()), float(self.Low_Width_known_value.text()), float(self.Parallelism_known_value.text())]
-        data = run_CGK(csv_name, known_values)
-
-        print(data)
-        data = data.T
-        self.show_RR_table_window(data)
-        self.save_history()
+        try:
+            data = run_CGK(csv_name, selected_cgk=getattr(self, 'selected_cgk', None))
+            print(data)
+            data = data.T
+            self.show_RR_table_window(data)
+            self.save_history()
+        except ValueError as e:
+            QMessageBox.warning(self, 'Selection Required', str(e))
+        except Exception as e:
+            QMessageBox.critical(self, 'Error', str(e))
 
     def read_history(self):
         self.ip_input.setText(self.settings.value('ip', ''))
@@ -689,15 +648,16 @@ class MainWindow(QMainWindow):
             self.selected_measurements = None
         
         self.CGK_input.setText(self.settings.value('CGK', ''))
-        self.flatness_known_value.setText(self.settings.value('CGK_Flat', ''))
-        self.S1_T_known_value.setText(self.settings.value('CGK_S1_T', ''))
-        self.S2_T_known_value.setText(self.settings.value('CGK_S2_T', ''))
-        self.S1_A_known_value.setText(self.settings.value('CGK_S1_A', ''))
-        self.S2_A_known_value.setText(self.settings.value('CGK_S2_A', ''))
-        self.Parallelism_known_value.setText(self.settings.value('CGK_Par', ''))
-        self.Ave_Width_known_value.setText(self.settings.value('CGK_Ave_Cut', ''))
-        self.High_Width_known_value.setText(self.settings.value('CGK_High_Cut', ''))
-        self.Low_Width_known_value.setText(self.settings.value('CGK_Low_Cut', ''))
+        # restore dynamic CGK selections
+        try:
+            stored_cgk = self.settings.value('selected_cgk', '')
+            if stored_cgk:
+                items = [s for s in stored_cgk.split('|') if s]
+                self.selected_cgk = [(i.split(':')[0], float(i.split(':')[1]), float(i.split(':')[2])) for i in items]
+            else:
+                self.selected_cgk = None
+        except Exception:
+            self.selected_cgk = None
 
     def save_history(self):
         self.settings.setValue('ip', self.ip_input.text())
@@ -772,15 +732,86 @@ class MainWindow(QMainWindow):
         dialog.exec()
         
         self.settings.setValue('CGK', self.CGK_input.text())
-        self.settings.setValue('CGK_Flat', self.flatness_known_value.text())
-        self.settings.setValue('CGK_S1_T', self.S1_T_known_value.text())
-        self.settings.setValue('CGK_S2_T', self.S2_T_known_value.text())
-        self.settings.setValue('CGK_S1_A', self.S1_A_known_value.text())
-        self.settings.setValue('CGK_S2_A', self.S2_A_known_value.text())
-        self.settings.setValue('CGK_Par', self.Parallelism_known_value.text())
-        self.settings.setValue('CGK_Ave_Cut', self.Ave_Width_known_value.text())
-        self.settings.setValue('CGK_High_Cut', self.High_Width_known_value.text())
-        self.settings.setValue('CGK_Low_Cut', self.Low_Width_known_value.text())
+
+    def open_cgk_selector(self, csv_path):
+        if not csv_path:
+            return
+        try:
+            df = pd.read_csv(csv_path, nrows=1)
+        except Exception:
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Select CGK Columns, Tolerances, Known Values')
+        layout = QVBoxLayout(dialog)
+
+        table = QTableWidget()
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(['Measurement (CSV Column)', 'Tolerance', 'Known Value'])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+
+        # Preload existing selections
+        preselected = getattr(self, 'selected_cgk', []) or []
+        pre_map = {name: (tol, known) for name, tol, known in preselected}
+
+        columns = [c for c in df.columns if c not in ['Index']]
+        table.setRowCount(len(columns))
+        for row, col_name in enumerate(columns):
+            name_item = QTableWidgetItem(col_name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            table.setItem(row, 0, name_item)
+
+            tol_value = pre_map.get(col_name, ('' , ''))[0]
+            known_value = pre_map.get(col_name, ('' , ''))[1]
+            tol_item = QTableWidgetItem(str(tol_value) if tol_value != '' else '')
+            known_item = QTableWidgetItem(str(known_value) if known_value != '' else '')
+            table.setItem(row, 1, tol_item)
+            table.setItem(row, 2, known_item)
+
+        layout.addWidget(table)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+
+        def accept():
+            selections = []
+            for r in range(table.rowCount()):
+                name = table.item(r, 0).text() if table.item(r, 0) else ''
+                tol_text = table.item(r, 1).text() if table.item(r, 1) else ''
+                known_text = table.item(r, 2).text() if table.item(r, 2) else ''
+                if name and tol_text and known_text:
+                    try:
+                        tol = float(tol_text)
+                        known = float(known_text)
+                        selections.append((name, tol, known))
+                    except ValueError:
+                        pass
+            self.selected_cgk = selections if selections else None
+            dialog.accept()
+
+        def reject():
+            dialog.reject()
+
+        buttons.accepted.connect(accept)
+        buttons.rejected.connect(reject)
+
+        dialog.exec()
+
+        # persist selection now
+        if hasattr(self, 'selected_cgk') and self.selected_cgk:
+            serialized = '|'.join([f"{name}:{tol}:{known}" for name, tol, known in self.selected_cgk])
+            self.settings.setValue('selected_cgk', serialized)
+        else:
+            self.settings.setValue('selected_cgk', '')
+        # persist selected CGK
+        if hasattr(self, 'selected_cgk') and self.selected_cgk:
+            serialized = '|'.join([f"{name}:{tol}:{known}" for name, tol, known in self.selected_cgk])
+            self.settings.setValue('selected_cgk', serialized)
+        else:
+            self.settings.setValue('selected_cgk', '')
+        self.settings.setValue('CGK', self.CGK_input.text())
 
 app = QApplication(sys.argv)
 app.processEvents()
