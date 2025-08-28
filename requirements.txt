@@ -1,0 +1,8 @@
+PySide6
+pycomm3
+pandas
+numpy
+statsmodels
+tabulate
+matplotlib
+qdarktheme
