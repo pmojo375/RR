@@ -11,6 +11,11 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QInputDialog,
     QFileDialog,
+    QDialog,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QDialogButtonBox,
 )
 from PySide6 import QtGui, QtCore
 
@@ -101,7 +106,7 @@ def fix(df):
 
     return df
 
-def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_methods=False, display_all=False, show_part_data=False):
+def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_methods=False, display_all=False, show_part_data=False, selected_measurements=None):
 
     # Load the data from CSV
     df = pd.read_csv(csv_name)
@@ -116,9 +121,23 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
     # Spare[10] = ParallelismMethod2
     # Spare[11] = ParallelismMethod3
 
+    # Ensure Part and Nest columns exist
+    if 'Part' not in df.columns:
+        df['Part'] = 1
+    if 'Nest' not in df.columns:
+        df['Nest'] = 1
+
     #df['ModelName'] = df['Nest']
 
-    if all_methods:
+    # If user selected custom measurements with tolerances, override defaults
+    if selected_measurements is not None and len(selected_measurements) > 0:
+        # selected_measurements is a list of tuples: (column_name, tolerance_value)
+        measurements = [m for m, _ in selected_measurements]
+        tolarances = [t for _, t in selected_measurements]
+        # Ensure numeric columns
+        for measurement in measurements:
+            df[measurement] = pd.to_numeric(df[measurement], errors='coerce')
+    elif all_methods:
 
         measurements = ['Flatness', 'FlatnessSmPts', 'Side1ToFront_Prof_ZeroT', 'Side1ToFront_Pts_ZeroT', 'Side2ToFront_Prof_ZeroT', 'Side2ToFront_Pts_ZeroT', 'Side1ToFrontFromPoints', 'Side2ToFrontFromPoints', 'Side1ToTopFromPoints', 'Side2ToTopFromPoints', 'Side1ToFront_Perpendicularity', 'Side2ToFront_Perpendicularity', 'Side1ToTop_Perpendicularity', 'Side2ToTop_Perpendicularity', 'CutWidthAve', 'CutWidthHigh', 'CutWidthLow', 'ParallelismMethod1','ParallelismMethod2','ParallelismMethod3']
 
@@ -580,6 +599,7 @@ class MainWindow(QMainWindow):
         self.read_tag_button = QPushButton("Read Tag")
         self.RR_input = QLineEdit()
         self.RR_Browse_button = QPushButton('Browse')
+        self.select_measurements_button = QPushButton('Select Measurements')
         self.RR_layout = QHBoxLayout()
         self.file_name_input = QLineEdit()
         self.RR_button = QPushButton("Run RR")
@@ -591,6 +611,7 @@ class MainWindow(QMainWindow):
 
         self.RR_layout.addWidget(self.RR_input)
         self.RR_layout.addWidget(self.RR_Browse_button)
+        self.RR_layout.addWidget(self.select_measurements_button)
 
         
 
@@ -650,6 +671,9 @@ class MainWindow(QMainWindow):
         self.RR_button.clicked.connect(
             lambda: self.RR_clicked(self.RR_input.text()))
         
+        self.select_measurements_button.clicked.connect(
+            lambda: self.open_measurement_selector(self.RR_input.text()))
+        
         
         
         self.CGK_button.clicked.connect(
@@ -675,7 +699,7 @@ class MainWindow(QMainWindow):
         self.save_history()
 
     def RR_clicked(self, csv_name):
-        data = run_RR(csv_name, boxplots=self.boxplots.isChecked(), scatterplots=self.scatterplots.isChecked(), type1=self.type1_mode.isChecked(), all_methods=self.all_methods.isChecked(), display_all=self.display_all.isChecked(), show_part_data=self.show_part_data.isChecked())
+        data = run_RR(csv_name, boxplots=self.boxplots.isChecked(), scatterplots=self.scatterplots.isChecked(), type1=self.type1_mode.isChecked(), all_methods=self.all_methods.isChecked(), display_all=self.display_all.isChecked(), show_part_data=self.show_part_data.isChecked(), selected_measurements=getattr(self, 'selected_measurements', None))
         # transpose data
         data = data.T
         self.show_RR_table_window(data)
@@ -695,6 +719,17 @@ class MainWindow(QMainWindow):
         self.ip_input.setText(self.settings.value('ip', ''))
         self.tag_input.setText(self.settings.value('tag', ''))
         self.RR_input.setText(self.settings.value('RR', ''))
+        # restore selected measurements if present
+        try:
+            stored = self.settings.value('selected_measurements', '')
+            if stored:
+                # stored as name:tolerance|name:tolerance|...
+                items = [s for s in stored.split('|') if s]
+                self.selected_measurements = [(i.split(':')[0], float(i.split(':')[1])) for i in items]
+            else:
+                self.selected_measurements = None
+        except Exception:
+            self.selected_measurements = None
         
         self.CGK_input.setText(self.settings.value('CGK', ''))
         self.flatness_known_value.setText(self.settings.value('CGK_Flat', ''))
@@ -711,6 +746,73 @@ class MainWindow(QMainWindow):
         self.settings.setValue('ip', self.ip_input.text())
         self.settings.setValue('tag', self.tag_input.text())
         self.settings.setValue('RR', self.RR_input.text())
+        # persist selected measurements
+        if hasattr(self, 'selected_measurements') and self.selected_measurements:
+            serialized = '|'.join([f"{name}:{tol}" for name, tol in self.selected_measurements])
+            self.settings.setValue('selected_measurements', serialized)
+        else:
+            self.settings.setValue('selected_measurements', '')
+
+    def open_measurement_selector(self, csv_path):
+        if not csv_path:
+            return
+        try:
+            df = pd.read_csv(csv_path, nrows=1)
+        except Exception:
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Select Measurements and Tolerances')
+        layout = QVBoxLayout(dialog)
+
+        table = QTableWidget()
+        table.setColumnCount(2)
+        table.setHorizontalHeaderLabels(['Measurement (CSV Column)', 'Tolerance'])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+
+        # Preload existing selections
+        preselected = getattr(self, 'selected_measurements', []) or []
+        pre_map = {name: tol for name, tol in preselected}
+
+        # Populate rows with all numeric-eligible columns except index-like
+        columns = [c for c in df.columns if c not in ['Index']]
+        table.setRowCount(len(columns))
+        for row, col_name in enumerate(columns):
+            name_item = QTableWidgetItem(col_name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            table.setItem(row, 0, name_item)
+
+            tol_value = pre_map.get(col_name, '')
+            tol_item = QTableWidgetItem(str(tol_value) if tol_value != '' else '')
+            table.setItem(row, 1, tol_item)
+
+        layout.addWidget(table)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+
+        def accept():
+            selections = []
+            for r in range(table.rowCount()):
+                name = table.item(r, 0).text() if table.item(r, 0) else ''
+                tol_text = table.item(r, 1).text() if table.item(r, 1) else ''
+                if name and tol_text:
+                    try:
+                        tol = float(tol_text)
+                        selections.append((name, tol))
+                    except ValueError:
+                        pass
+            self.selected_measurements = selections if selections else None
+            dialog.accept()
+
+        def reject():
+            dialog.reject()
+
+        buttons.accepted.connect(accept)
+        buttons.rejected.connect(reject)
+
+        dialog.exec()
         
         self.settings.setValue('CGK', self.CGK_input.text())
         self.settings.setValue('CGK_Flat', self.flatness_known_value.text())
