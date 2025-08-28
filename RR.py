@@ -152,12 +152,18 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
 
 
     if boxplots:
-        # plot each part and nest combination as a boxplot with subplots
-        fig, axs = plt.subplots(3, 3, figsize=(15, 15))
+        # dynamic grid based on number of measurements
+        num_plots = len(measurements)
+        rows = int(np.ceil(np.sqrt(num_plots)))
+        cols = int(np.ceil(num_plots / rows))
+        fig, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4.5))
         fig.suptitle('Measurement Boxplots')
 
+        # Flatten axes for easy indexing
+        axes_list = np.array(axs).reshape(-1) if isinstance(axs, (list, np.ndarray)) else np.array([axs])
+
         for i, measurement in enumerate(measurements):
-            ax = axs[i // 3, i % 3]
+            ax = axes_list[i]
             df.boxplot(column=measurement, by='Part', ax=ax, patch_artist=True)
             ax.set_title(measurement)
             ax.set_xlabel('Part')
@@ -167,28 +173,36 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
             # set y axis to 1.5 times the range of the data
             ax.set_ylim(df[measurement].min() - (df[measurement].max() - df[measurement].min()) / 2, df[measurement].max() + (df[measurement].max() - df[measurement].min()) / 2)
 
-            # space out subplots more
-            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        # Hide any unused axes
+        for j in range(num_plots, len(axes_list)):
+            axes_list[j].axis('off')
 
-            # add vertical spacing between plots
-            plt.subplots_adjust(hspace=0.5)
+        # space out subplots more
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        plt.subplots_adjust(hspace=0.5)
 
         # set plot window title
         fig.canvas.manager.set_window_title('Measurement Box Plots')
 
-        # set window size
-        fig.set_size_inches(15, 10)
+        # set window size roughly proportional to grid
+        fig.set_size_inches(max(10, cols * 5), max(8, rows * 4))
 
         plt.show()
 
     if scatterplots:
-        # show each part for each measurement as a scatter plot with subplots
-        fig, axs = plt.subplots(3, 3, figsize=(15, 15))
+        # dynamic grid based on number of measurements
+        num_plots = len(measurements)
+        rows = int(np.ceil(np.sqrt(num_plots)))
+        cols = int(np.ceil(num_plots / rows))
+        fig, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4.5))
         fig.suptitle('Measurement Scatter Plots')
+
+        # Flatten axes for easy indexing
+        axes_list = np.array(axs).reshape(-1) if isinstance(axs, (list, np.ndarray)) else np.array([axs])
 
         # line plot with dots only
         for i, measurement in enumerate(measurements):
-            ax = axs[i // 3, i % 3]
+            ax = axes_list[i]
             df.plot.scatter(x='Part', y=measurement, ax=ax)
             ax.set_title(measurement)
             ax.set_xlabel('Part')
@@ -197,19 +211,22 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
             ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: int(x)))
             # set y axis to 1.5 times the range of the data
             ax.set_ylim(df[measurement].min() - (df[measurement].max() - df[measurement].min()) / 4, df[measurement].max() + (df[measurement].max() - df[measurement].min()) / 4)
-            # Make the points smaller
+            # Make the points smaller (overlay)
             ax.scatter(df['Part'], df[measurement], s=10)
-            # space out subplots more
-            plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-            # add vertical spacing between plots
-            plt.subplots_adjust(hspace=0.5)
+        # Hide any unused axes
+        for j in range(num_plots, len(axes_list)):
+            axes_list[j].axis('off')
+
+        # space out subplots more
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        plt.subplots_adjust(hspace=0.5)
 
         # set plot window title
         fig.canvas.manager.set_window_title('Measurement Scatter Plots')
 
-        # set window size
-        fig.set_size_inches(15, 10)
+        # set window size roughly proportional to grid
+        fig.set_size_inches(max(10, cols * 5), max(8, rows * 4))
 
         plt.show()
 
@@ -265,22 +282,22 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, all_method
         part_stats = []
         if show_part_data:
             if type1:
-                range = f'{df[measurement].max() - df[measurement].min():.4f}mm'
-                min = f'{df[measurement].min():.4f}mm'
-                max = f'{df[measurement].max():.4f}mm'
+                value_range = f'{df[measurement].max() - df[measurement].min():.4f}mm'
+                min_value = f'{df[measurement].min():.4f}mm'
+                max_value = f'{df[measurement].max():.4f}mm'
                 stdev = df[measurement].std() * 3
 
                 CG = (Tolerance*.1)/stdev
 
-                part_stats.extend([CG, range, min, max])
+                part_stats.extend([CG, value_range, min_value, max_value])
             else:
                 for part in df['Part'].unique():
                     part_df = df[df['Part'] == part]
-                    range = f'{part_df[measurement].max() - part_df[measurement].min():.4f}mm'
-                    min = f'{part_df[measurement].min():.4f}mm'
-                    max = f'{part_df[measurement].max():.4f}mm'
+                    value_range = f'{part_df[measurement].max() - part_df[measurement].min():.4f}mm'
+                    min_value = f'{part_df[measurement].min():.4f}mm'
+                    max_value = f'{part_df[measurement].max():.4f}mm'
 
-                    part_stats.extend([range, min, max])
+                    part_stats.extend([value_range, min_value, max_value])
 
 
         # Check if Study Variation is within 10% of Tolerance
