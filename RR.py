@@ -205,8 +205,10 @@ def run_RR(csv_name, boxplots=False, scatterplots=False, type1=False, show_part_
 
     for i, measurement in enumerate(measurements):
 
-        # Fit the ANOVA model
-        model = ols(f'{measurement} ~ C(Part) + C(Nest) + C(Part):C(Nest)', data=df).fit()
+        # Fit the ANOVA model; quote measurement to allow dots/special chars in column names
+        safe_measurement = str(measurement).replace('"', '\\"')
+        formula = f'Q("{safe_measurement}") ~ C(Part) + C(Nest) + C(Part):C(Nest)'
+        model = ols(formula, data=df).fit()
         anova_table = sm.stats.anova_lm(model, typ=1)
         
         # Sum of Squares
